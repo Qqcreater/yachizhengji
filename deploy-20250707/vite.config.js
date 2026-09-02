@@ -26,13 +26,6 @@ export default defineConfig({
           Origin: 'https://openapi-lab.ilmsmile.com.cn',
         },
       },
-      // DeepSeek 大模型 API 代理：前端请求 /deepseek-proxy/chat/completions
-      // 实际转发到 https://api.deepseek.com/chat/completions，规避浏览器跨域限制
-      '/deepseek-proxy': {
-        target: 'https://api.deepseek.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/deepseek-proxy/, ''),
-      },
     },
   },
 })

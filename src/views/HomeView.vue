@@ -10,6 +10,7 @@
           <div class="hero-buttons">
             <a href="/cephalometric" class="primary-btn">{{ t('home.cephalometricBtn') }}</a>
             <a href="/panoramic" class="secondary-btn">{{ t('home.panoramicBtn') }}</a>
+            <a href="/autocrop" class="secondary-btn">{{ t('home.autocropBtn') }}</a>
           </div>
         </div>
         <div class="hero-visual">
@@ -244,6 +245,16 @@
             <h3>{{ t('home.panoramicTitle') }}</h3>
             <p>{{ t('home.panoramicDesc') }}</p>
           </div>
+          <div class="feature-card" @click="goToAutocrop">
+            <div class="feature-icon">📷</div>
+            <h3>{{ t('home.autocropTitle') }}</h3>
+            <p>{{ t('home.autocropDesc') }}</p>
+          </div>
+          <div class="feature-card" @click="goToDentalQA">
+            <div class="feature-icon">💬</div>
+            <h3>{{ t('home.dentalQATitle') }}</h3>
+            <p>{{ t('home.dentalQADesc') }}</p>
+          </div>
         </div>
       </div>
 
@@ -282,6 +293,14 @@ const goToCephalometric = () => {
 
 const goToPanoramic = () => {
   router.push('/panoramic')
+}
+
+const goToAutocrop = () => {
+  router.push('/autocrop')
+}
+
+const goToDentalQA = () => {
+  router.push('/dental-qa')
 }
 </script>
 
@@ -532,9 +551,9 @@ const goToPanoramic = () => {
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-  max-width: 800px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 

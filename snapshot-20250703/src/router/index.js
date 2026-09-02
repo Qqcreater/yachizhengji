@@ -20,21 +20,6 @@ const router = createRouter({
       component: () => import('../views/PanoramicView.vue'),
     },
     {
-      path: '/autocrop',
-      name: 'autocrop',
-      component: () => import('../views/AutoCropView.vue'),
-    },
-    {
-      path: '/dental-qa',
-      name: 'dentalQA',
-      component: () => import('../views/DentalQAView.vue'),
-    },
-    {
-      path: '/report',
-      name: 'report',
-      component: () => import('../views/ReportView.vue'),
-    },
-    {
       path: '/diagnosis',
       name: 'diagnosis',
       component: () => import('../views/DiagnosisView.vue'),

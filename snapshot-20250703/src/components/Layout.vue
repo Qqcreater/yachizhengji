@@ -85,9 +85,6 @@ const menuItems = computed(() => [
   { path: '/', name: t('sidebar.home'), icon: '🏠' },
   { path: '/cephalometric', name: t('sidebar.cephalometric'), icon: '🩻' },
   { path: '/panoramic', name: t('sidebar.panoramic'), icon: '🔬' },
-  { path: '/autocrop', name: t('sidebar.autocrop'), icon: '📷' },
-  { path: '/dental-qa', name: t('sidebar.dentalQA'), icon: '💬' },
-  { path: '/report', name: t('sidebar.medicalReport'), icon: '📄' },
 ])
 
 onMounted(() => {
@@ -123,9 +120,6 @@ const closeAuthModal = () => {
 const handleAuthSubmit = (data) => {
   localStorage.setItem('userInfo', JSON.stringify({
     nickname: data.username,
-    fullName: data.fullName || data.username,
-    age: data.age || '',
-    bloodType: data.bloodType || '不详',
     isLogin: true
   }))
   isLogin.value = true

@@ -176,9 +176,7 @@ export async function callOpenApi({ endpoint, file, apiKey = SHARED_API_KEY, tim
       reader.onerror = reject
       reader.readAsDataURL(file)
     })
-    // 与官方调试台示例一致：img 字段传纯 base64（去掉 dataURL 前缀）
-    const pureBase64 = String(dataUrl).split(',')[1] || ''
-    formData.append(fileField, pureBase64)
+    formData.append(fileField, dataUrl)
   } else {
     formData.append(fileField, file, file.name || 'upload.jpg')
   }

@@ -18,20 +18,16 @@ export default defineConfig({
   server: {
     port: 5176,
     proxy: {
-      '/openapi': {
+      '/api-proxy': {
         target: 'https://openapi-lab.ilmsmile.com.cn',
         changeOrigin: true,
         secure: false,
-        headers: {
-          Origin: 'https://openapi-lab.ilmsmile.com.cn',
-        },
+        rewrite: (path) => path.replace(/^\/api-proxy/, '/openapi'),
       },
-      // DeepSeek 大模型 API 代理：前端请求 /deepseek-proxy/chat/completions
-      // 实际转发到 https://api.deepseek.com/chat/completions，规避浏览器跨域限制
-      '/deepseek-proxy': {
-        target: 'https://api.deepseek.com',
+      '/serverapi': {
+        target: 'https://openapi-lab.ilmsmile.com.cn',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/deepseek-proxy/, ''),
+        secure: false,
       },
     },
   },

@@ -9,55 +9,19 @@
       <form class="modal-form" @submit.prevent="handleSubmit">
         <div class="form-group">
           <label>账号</label>
-          <input
-            type="text"
-            v-model="form.username"
+          <input 
+            type="text" 
+            v-model="form.username" 
             placeholder="请输入账号"
             required
           />
         </div>
 
         <div class="form-group">
-          <label>姓名</label>
-          <input
-            type="text"
-            v-model="form.fullName"
-            placeholder="请输入真实姓名（用于检验报告）"
-            required
-          />
-        </div>
-
-        <div class="form-row">
-          <div class="form-group half">
-            <label>年龄</label>
-            <input
-              type="number"
-              v-model.number="form.age"
-              placeholder="请输入年龄"
-              min="1"
-              max="120"
-              required
-            />
-          </div>
-
-          <div class="form-group half">
-            <label>血型</label>
-            <select v-model="form.bloodType" required>
-              <option value="" disabled>请选择血型</option>
-              <option value="A">A 型</option>
-              <option value="B">B 型</option>
-              <option value="AB">AB 型</option>
-              <option value="O">O 型</option>
-              <option value="不详">不详</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-group">
           <label>密码</label>
-          <input
-            type="password"
-            v-model="form.password"
+          <input 
+            type="password" 
+            v-model="form.password" 
             placeholder="请输入密码"
             required
           />
@@ -106,18 +70,12 @@ const emit = defineEmits(['close', 'submit', 'switch'])
 
 const form = reactive({
   username: '',
-  fullName: '',
-  age: '',
-  bloodType: '',
   password: '',
   confirmPassword: ''
 })
 
 watch(() => props.type, () => {
   form.username = ''
-  form.fullName = ''
-  form.age = ''
-  form.bloodType = ''
   form.password = ''
   form.confirmPassword = ''
 })
@@ -127,12 +85,9 @@ const handleSubmit = () => {
     alert('两次输入的密码不一致')
     return
   }
-
+  
   emit('submit', {
     username: form.username,
-    fullName: form.fullName,
-    age: form.age,
-    bloodType: form.bloodType,
     password: form.password
   })
 }
@@ -230,8 +185,7 @@ const handleSubmit = () => {
   margin-bottom: 8px;
 }
 
-.form-group input,
-.form-group select {
+.form-group input {
   width: 100%;
   padding: 12px 16px;
   border: 2px solid #e8e8e8;
@@ -239,21 +193,9 @@ const handleSubmit = () => {
   font-size: 15px;
   transition: border-color 0.25s;
   box-sizing: border-box;
-  background: white;
 }
 
-.form-row {
-  display: flex;
-  gap: 12px;
-}
-
-.form-group.half {
-  flex: 1;
-  min-width: 0;
-}
-
-.form-group input:focus,
-.form-group select:focus {
+.form-group input:focus {
   outline: none;
   border-color: #667eea;
 }

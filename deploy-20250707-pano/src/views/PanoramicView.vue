@@ -127,7 +127,7 @@
                       stroke="#ffffff"
                       :stroke-width="naturalWidth * 0.003"
                     />
-                    <!-- 牙位编号展示接口返回的 FDI 牙号 -->
+                    <!-- 牙位编号展示前端自增序号 -->
                     <text
                       v-if="hasCenter(tooth)"
                       :x="getToothLabelPosition(tooth).x"
@@ -140,7 +140,7 @@
                       :stroke-width="naturalWidth * 0.008"
                       stroke-linecap="round"
                       stroke-linejoin="round"
-                    >{{ tooth.label }}</text>
+                    >{{ tooth.displayIndex }}</text>
                     <text
                       v-if="hasCenter(tooth)"
                       :x="getToothLabelPosition(tooth).x"
@@ -149,7 +149,7 @@
                       font-weight="600"
                       text-anchor="middle"
                       :fill="getToothColor(tooth, 1)"
-                    >{{ tooth.label }}</text>
+                    >{{ tooth.displayIndex }}</text>
                   </g>
                 </svg>
               </div>
@@ -183,7 +183,7 @@
               >
                 <span class="landmark-label">
                   <span class="status-dot" :style="{ background: getToothColor(tooth, 1) }"></span>
-                  {{ tooth.label }}
+                  {{ tooth.displayIndex }}
                 </span>
                 <span>
                   <span class="status-tag" :style="{ background: getToothColor(tooth, 0.15), color: getToothColor(tooth, 1), borderColor: getToothColor(tooth, 0.4) }">
@@ -260,7 +260,7 @@
               class="tooth-chip permanent-chip"
               @click="focusToothInModal(tooth)"
             >
-              <span class="chip-num">{{ tooth.label }}</span>
+              <span class="chip-num">{{ tooth.displayIndex }}</span>
             </div>
           </div>
         </div>
@@ -285,7 +285,7 @@
               class="tooth-chip deciduous-chip"
               @click="focusToothInModal(tooth)"
             >
-              <span class="chip-num">{{ tooth.label }}</span>
+              <span class="chip-num">{{ tooth.displayIndex }}</span>
             </div>
           </div>
         </div>
@@ -349,7 +349,7 @@
                   :stroke-width="naturalWidth * 0.008"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                >{{ tooth.label }}</text>
+                >{{ tooth.displayIndex }}</text>
                 <text
                   v-if="hasCenter(tooth)"
                   :x="getToothLabelPosition(tooth).x"
@@ -358,7 +358,7 @@
                   font-weight="600"
                   text-anchor="middle"
                   :fill="getToothColor(tooth, 1)"
-                >{{ tooth.label }}</text>
+                >{{ tooth.displayIndex }}</text>
               </g>
             </svg>
           </div>
@@ -378,7 +378,6 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TopNav from '../components/TopNav.vue'
 import { t, tp } from '../i18n/index.js'
 import { SHARED_API_KEY, SHARED_TIMEOUT_MS, callOpenApi, formatErrorMessage } from '../utils/openapi.js'
-import { saveReportSection } from '../utils/medicalReport.js'
 
 // ===== 接口配置 =====
 // 与 CephaloView 保持一致的配置结构，复用同一套 fetch 请求模板
@@ -481,7 +480,7 @@ const collisionAvoidance = ref([])
 
 const getToothLabelPosition = (tooth) => {
   const center = getToothCenter(tooth)
-  const adjusted = collisionAvoidance.value.find(item => item.label === tooth.label)
+  const adjusted = collisionAvoidance.value.find(item => item.label === tooth.displayIndex)
   if (adjusted) return { x: adjusted.x, y: adjusted.y }
 
   const normX = center.x / naturalWidth.value
@@ -495,7 +494,7 @@ const getToothLabelPosition = (tooth) => {
   let finalY = center.y + baseOffset.y
 
   const fontSize = naturalWidth.value * 0.022
-  const textWidth = (String(tooth.label)?.length || 1) * fontSize * 0.6
+  const textWidth = (String(tooth.displayIndex)?.length || 1) * fontSize * 0.6
   const textVisualTop = fontSize * 0.75
   const margin = 3
 
@@ -526,10 +525,10 @@ const updateCollisionAvoidance = () => {
     .map(tooth => {
       const pos = getToothLabelPosition(tooth)
       return {
-        label: tooth.label,
+        label: tooth.displayIndex,
         x: pos.x,
         y: pos.y,
-        width: (String(tooth.label)?.length || 1) * fontSize * 0.6,
+        width: (String(tooth.displayIndex)?.length || 1) * fontSize * 0.6,
         height: fontSize
       }
     })
@@ -755,13 +754,8 @@ const ANATOMY_FILTER_ENABLED = ref(true)
 const ANATOMY_TNAMES = new Set(['01', '02', '03'])
 const isAnatomyStructure = (label) => ANATOMY_TNAMES.has(String(label))
 
-const parseTeeth = (rawData, imgsize) => {
+const parseTeeth = (rawData) => {
   if (!rawData) return []
-
-  // ===== 接口处理尺寸（与 CephaloView 对齐）：坐标需除以接口返回的 imgsize =====
-  const apiWidth = imgsize && Array.isArray(imgsize) && imgsize[0] ? parseFloat(imgsize[0]) : 0
-  const apiHeight = imgsize && Array.isArray(imgsize) && imgsize[1] ? parseFloat(imgsize[1]) : 0
-  console.log(`[Panoramic] API处理尺寸: ${apiWidth} x ${apiHeight}，前端图片尺寸: ${naturalWidth.value} x ${naturalHeight.value}`)
 
   // ===== 优先级链：从已知字段名提取牙齿数组 =====
   // toothless API 成功响应结构: {code:0, r:{_:"...", sym:[...]}}
@@ -798,11 +792,7 @@ const parseTeeth = (rawData, imgsize) => {
     return []
   }
 
-  // ===== 诊断：打印第一颗牙完整原始结构，确认可用字段与坐标语义 =====
-  console.log('[Panoramic][诊断] 第一颗牙原始 JSON:', JSON.stringify(teethArray[0], null, 2))
-  console.log('[Panoramic][诊断] r 对象顶层键:', Object.keys(rawData))
-
-  let parsed = teethArray.map((item, idx) => parseTooth(item, idx, imgsize)).filter(Boolean)
+  let parsed = teethArray.map((item, idx) => parseTooth(item, idx)).filter(Boolean)
 
   // 兜底过滤解剖结构误检（01/02/03）
   if (ANATOMY_FILTER_ENABLED.value) {
@@ -818,7 +808,7 @@ const parseTeeth = (rawData, imgsize) => {
   return parsed
 }
 
-const parseTooth = (item, idx, imgsize) => {
+const parseTooth = (item, idx) => {
   if (!item || typeof item !== 'object') return null
 
   const label = String(item.tname ?? item.tno ?? item.id ?? item.label ?? `T${idx + 1}`)
@@ -870,10 +860,8 @@ const parseTooth = (item, idx, imgsize) => {
 
   if ((isNaN(cx) || isNaN(cy)) && (!outline || outline.length < 3)) return null
 
-  // ===== 坐标参考尺寸：优先接口处理尺寸 imgsize，回退前端图片尺寸 =====
-  // 与 CephaloView 对齐：接口坐标是相对接口处理图的像素坐标
-  const W = (imgsize && Array.isArray(imgsize) && imgsize[0] ? parseFloat(imgsize[0]) : 0) || naturalWidth.value || 1
-  const H = (imgsize && Array.isArray(imgsize) && imgsize[1] ? parseFloat(imgsize[1]) : 0) || naturalHeight.value || 1
+  const W = naturalWidth.value || 1
+  const H = naturalHeight.value || 1
   const normClamp = (v) => Math.max(0, Math.min(1, isNaN(v) ? 0 : v))
 
   // ===== 坐标双单位自适应：>1 当绝对像素（需除以 W/H），<=1 当归一化 =====
@@ -892,18 +880,6 @@ const parseTooth = (item, idx, imgsize) => {
     outlineNorm = outline.map(p => ({ x: adaptNorm(p.x, W), y: adaptNorm(p.y, H) }))
   }
 
-  // ===== 调试：bbox 同样归一化，用于交叉验证坐标系 =====
-  let bboxNorm = null
-  if (Array.isArray(item.bbox) && item.bbox.length >= 4) {
-    const bx1 = parseFloat(item.bbox[0])
-    const by1 = parseFloat(item.bbox[1])
-    const bx2 = parseFloat(item.bbox[2])
-    const by2 = parseFloat(item.bbox[3])
-    if (!isNaN(bx1) && !isNaN(by1) && !isNaN(bx2) && !isNaN(by2)) {
-      bboxNorm = { x1: adaptNorm(bx1, W), y1: adaptNorm(by1, H), x2: adaptNorm(bx2, W), y2: adaptNorm(by2, H) }
-    }
-  }
-
   return {
     id: `tooth-${label}-${idx}`,
     label,
@@ -914,7 +890,6 @@ const parseTooth = (item, idx, imgsize) => {
     y: centerNorm?.y ?? null,
     contour: outlineNorm,
     hasContour: !!(outlineNorm && outlineNorm.length >= 3),
-    bboxNorm,
     area: item.area ?? null,
     bbox: item.bbox ?? null,
   }
@@ -967,8 +942,6 @@ const startAnalysis = async () => {
       apiKey: API_CONFIG.apiKey,
       timeoutMs: API_CONFIG.timeout,
       extraFields: API_CONFIG.extraFields,
-      // 与官方调试台示例一致：img 以纯 base64 字符串传输
-      fileMode: 'base64',
       pageType: 'panoramic',
     })
 
@@ -984,15 +957,7 @@ const startAnalysis = async () => {
       } else {
         resultImage.value = uploadedImage.value
         await waitForImageLoad()
-        // imgsize 位于响应顶层（与 data.r 同级），为接口处理图尺寸，坐标换算必须以它为分母
-        teeth.value = parseTeeth(rObj, data.imgsize)
-        // 保存识别结果摘要，供检验报告页生成诊断证明书
-        saveReportSection('panoramic', {
-          total: teeth.value.length,
-          permanent: teeth.value.filter(x => x.type === 'permanent').length,
-          deciduous: teeth.value.filter(x => x.type === 'deciduous').length,
-          teeth: teeth.value.map(x => ({ label: x.label, type: x.type, x: +(x.x * 100).toFixed(1), y: +(x.y * 100).toFixed(1) })),
-        })
+        teeth.value = parseTeeth(rObj)
         updateCollisionAvoidance()
 
         if (teeth.value.length === 0) {
@@ -1142,12 +1107,11 @@ const sortedTeeth = computed(() =>
   text-align: center;
   cursor: pointer;
   transition: all 0.3s;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 限制高度，保证「重新分析/重新选择」按钮无需滚动即可见 */
-  flex: 0 0 auto;
-  height: clamp(380px, 56vh, 660px);
+  min-height: 380px;
   margin-bottom: 8px;
   overflow: hidden;
   background: #fafafa;
@@ -1310,9 +1274,7 @@ const sortedTeeth = computed(() =>
 
 /* ===== 右侧结果区 ===== */
 .result-area {
-  /* 与左侧上传区等高，上传前后界面尺寸保持一致 */
-  flex: 0 0 auto;
-  height: clamp(380px, 56vh, 660px);
+  flex: 1;
   border: 2px dashed #d9d9d9;
   border-radius: 12px;
   display: flex;
@@ -1323,6 +1285,7 @@ const sortedTeeth = computed(() =>
   margin-bottom: 8px;
   transition: all 0.3s;
   position: relative;
+  min-height: 380px;
 }
 
 .result-area.filled {

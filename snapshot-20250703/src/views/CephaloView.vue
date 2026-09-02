@@ -17,7 +17,6 @@
 
           <div
             class="upload-area"
-            :class="{ 'has-image': uploadedImage }"
             @click="handleUploadAreaClick"
             @dragover.prevent
             @drop.prevent="handleDrop"
@@ -34,40 +33,12 @@
               <p>{{ t('cephalometric.uploadPlaceholder') }}</p>
               <p class="sub-hint">{{ t('cephalometric.uploadSubHint') }}</p>
             </div>
-            <div v-else class="preview-wrap">
-              <img
-                :src="uploadedImage"
-                class="preview-image"
-                :alt="t('cephalometric.originalImage')"
-                @load="onPreviewLoad"
-              />
-              <div v-if="cropRect" ref="cropLayerRef" class="crop-layer">
-                <div
-                  class="crop-box"
-                  :style="cropBoxStyle"
-                  @pointerdown.stop.prevent="onCropDown($event, 'move')"
-                >
-                  <span
-                    class="crop-handle"
-                    @pointerdown.stop.prevent="onCropDown($event, 'resize')"
-                  ></span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 预处理提示：悬浮于上传区底部，不占布局高度 -->
-            <div class="preprocess-tip" v-if="!uploadedImage">
-              <span class="tip-icon">💡</span>
-              <div class="tip-content">
-                <p class="tip-main">{{ t('cephalometric.preprocessTip') }}</p>
-                <p class="tip-sub">{{ t('cephalometric.preprocessSubTip') }}</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="crop-hint" v-if="uploadedImage && cropRect">
-            <span class="tip-icon">✂️</span>
-            <p>{{ t('cephalometric.cropHint') }}</p>
+            <img
+              v-else
+              :src="uploadedImage"
+              class="preview-image"
+              :alt="t('cephalometric.originalImage')"
+            />
           </div>
 
           <div class="button-group">
@@ -149,21 +120,14 @@
           </div>
 
           <div v-if="landmarks.length > 0" class="landmarks-list">
-            <div class="table-header">
-              <span>{{ t('cephalometric.pointName') }}</span>
-              <span>{{ t('cephalometric.xCoord') }}</span>
-              <span>{{ t('cephalometric.yCoord') }}</span>
-            </div>
-            <div class="table-body">
-              <div 
-                v-for="(point, index) in landmarks" 
-                :key="index" 
-                class="table-row"
-              >
-                <span class="landmark-label">{{ point.label }}</span>
-                <span>{{ (point.x * 100).toFixed(1) }}%</span>
-                <span>{{ (point.y * 100).toFixed(1) }}%</span>
-              </div>
+            <div
+              v-for="(point, index) in landmarks"
+              :key="index"
+              class="table-row"
+            >
+              <span class="landmark-label">{{ point.label }}</span>
+              <span>{{ (point.x * 100).toFixed(1) }}%</span>
+              <span>{{ (point.y * 100).toFixed(1) }}%</span>
             </div>
           </div>
         </div>
@@ -238,16 +202,12 @@
 import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import TopNav from '../components/TopNav.vue'
 import { t } from '../i18n/index.js'
-import { SHARED_API_KEY, SHARED_TIMEOUT_MS, callOpenApi, formatErrorMessage } from '../utils/openapi.js'
-import { saveReportSection } from '../utils/medicalReport.js'
 
 // ===== 接口配置 =====
 const API_CONFIG = {
-  endpoint: '/openapi/v1/x/hneck/p17',
-  apiKey: SHARED_API_KEY,
-  timeout: SHARED_TIMEOUT_MS,
-  // hneck/p17 接口需要 cvm 参数（Cervical Vertebral Maturity，0=不评估）
-  extraFields: { cvm: '0' },
+  endpoint: '/api-proxy/v1/x/hneck/p17',
+  apiKey: 'sk_q1nu8iormmvw_im_echgu7lttawqwzy7',
+  timeout: 30000,
 }
 
 const fileInput = ref(null)
@@ -255,141 +215,6 @@ const uploadedImage = ref('')
 const originalFile = ref(null)
 const resultImage = ref('')
 const isAnalyzing = ref(false)
-
-// ===== 上传前自动裁剪（翻拍图预处理）=====
-// cropRect 为归一化坐标 {x, y, w, h}（0~1，相对原图）
-const cropRect = ref(null)
-const cropLayerRef = ref(null)
-let cropDrag = null
-
-const clamp01 = (v, min, max) => Math.min(max, Math.max(min, v))
-
-const cropBoxStyle = computed(() => {
-  const { x, y, w, h } = cropRect.value
-  return {
-    left: `${x * 100}%`,
-    top: `${y * 100}%`,
-    width: `${w * 100}%`,
-    height: `${h * 100}%`,
-  }
-})
-
-// 预览图加载后：检测暗色（X光片底色）包围盒作为初始裁剪框
-const onPreviewLoad = (e) => {
-  cropRect.value = null
-  const img = e.target
-  try {
-    const W = 240
-    const scale = W / img.naturalWidth
-    const H = Math.max(1, Math.round(img.naturalHeight * scale))
-    const cv = document.createElement('canvas')
-    cv.width = W
-    cv.height = H
-    const ctx = cv.getContext('2d', { willReadFrequently: true })
-    ctx.drawImage(img, 0, 0, W, H)
-    const { data } = ctx.getImageData(0, 0, W, H)
-    let minX = W, minY = H, maxX = -1, maxY = -1, darkCount = 0
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const i = (y * W + x) * 4
-        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
-        if (lum < 70) {
-          darkCount++
-          if (x < minX) minX = x
-          if (y < minY) minY = y
-          if (x > maxX) maxX = x
-          if (y > maxY) maxY = y
-        }
-      }
-    }
-    const total = W * H
-    // 暗区占比过低（无X光片）或已接近全图（纯底片）→ 不需要裁剪
-    if (maxX < 0 || darkCount / total < 0.05) return
-    let bx = minX / W, by = minY / H
-    let bw = (maxX - minX + 1) / W
-    let bh = (maxY - minY + 1) / H
-    if (bw * bh > 0.92) return
-    // 四周留 15% padding，避免切掉关键信息
-    const pad = 0.15
-    bx = Math.max(0, bx - bw * pad)
-    by = Math.max(0, by - bh * pad)
-    bw = Math.min(1 - bx, bw * (1 + 2 * pad))
-    bh = Math.min(1 - by, bh * (1 + 2 * pad))
-    bw = Math.max(0.15, bw)
-    bh = Math.max(0.15, bh)
-    cropRect.value = { x: bx, y: by, w: bw, h: bh }
-  } catch (_) {
-    // canvas 被污染等异常时静默跳过，退化为原图上传
-    cropRect.value = null
-  }
-}
-
-const onCropDown = (e, mode) => {
-  cropDrag = { mode, startX: e.clientX, startY: e.clientY, orig: { ...cropRect.value } }
-  window.addEventListener('pointermove', onCropMove)
-  window.addEventListener('pointerup', onCropUp)
-}
-
-const onCropMove = (e) => {
-  if (!cropDrag || !cropLayerRef.value) return
-  const rect = cropLayerRef.value.getBoundingClientRect()
-  const dx = (e.clientX - cropDrag.startX) / rect.width
-  const dy = (e.clientY - cropDrag.startY) / rect.height
-  const o = cropDrag.orig
-  if (cropDrag.mode === 'move') {
-    cropRect.value = {
-      ...o,
-      x: clamp01(o.x + dx, 0, 1 - o.w),
-      y: clamp01(o.y + dy, 0, 1 - o.h),
-    }
-  } else {
-    cropRect.value = {
-      ...o,
-      w: clamp01(o.w + dx, 0.1, 1 - o.x),
-      h: clamp01(o.h + dy, 0.1, 1 - o.y),
-    }
-  }
-}
-
-const onCropUp = () => {
-  cropDrag = null
-  window.removeEventListener('pointermove', onCropMove)
-  window.removeEventListener('pointerup', onCropUp)
-}
-
-// 按当前裁剪框从原图裁出 PNG File，并把预览替换为裁剪图
-const applyCropIfNeeded = () =>
-  new Promise((resolve) => {
-    if (!cropRect.value || !uploadedImage.value) {
-      resolve()
-      return
-    }
-    const img = new Image()
-    img.onload = () => {
-      const { x, y, w, h } = cropRect.value
-      const sx = Math.round(img.naturalWidth * x)
-      const sy = Math.round(img.naturalHeight * y)
-      const sw = Math.max(1, Math.round(img.naturalWidth * w))
-      const sh = Math.max(1, Math.round(img.naturalHeight * h))
-      const cv = document.createElement('canvas')
-      cv.width = sw
-      cv.height = sh
-      cv.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
-      cv.toBlob((blob) => {
-        if (blob) {
-          originalFile.value = new File([blob], 'cropped.png', { type: 'image/png' })
-          uploadedImage.value = cv.toDataURL('image/png')
-        }
-        cropRect.value = null
-        resolve()
-      }, 'image/png')
-    }
-    img.onerror = () => {
-      cropRect.value = null
-      resolve()
-    }
-    img.src = uploadedImage.value
-  })
 const resultImgRef = ref(null)
 const imageWrapperRef = ref(null)
 
@@ -736,7 +561,6 @@ const handleResize = () => {
 }
 
 const handleUploadAreaClick = () => {
-  if (uploadedImage.value) return
   if (fileInput.value) {
     fileInput.value.click()
   }
@@ -812,59 +636,86 @@ const startAnalysis = async () => {
   }
   if (isAnalyzing.value) return
 
-  // 翻拍图预处理：按裁剪框裁出X光区域后再上传
-  await applyCropIfNeeded()
-
   isAnalyzing.value = true
   displayReady.value = false
   landmarks.value = []
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.timeout)
+
   try {
-    const result = await callOpenApi({
-      endpoint: API_CONFIG.endpoint,
-      file: originalFile.value,
-      apiKey: API_CONFIG.apiKey,
-      timeoutMs: API_CONFIG.timeout,
-      extraFields: API_CONFIG.extraFields,
-      // 与官方调试台示例一致：img 以纯 base64 字符串传输
-      fileMode: 'base64',
-      pageType: 'cephalometric',
+    // 将文件转为 base64
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result
+        resolve(result.split(',')[1])
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(originalFile.value)
     })
 
-    if (result.ok && result.data) {
-      const data = result.data
-      resultImage.value = uploadedImage.value
-      landmarks.value = parseLandmarks(data.r, data.imgsize)
+    const formData = new FormData()
+    formData.append('cvm', '0')
+    formData.append('img', base64)
 
-      if (landmarks.value.length === 0) {
-        alert('识别成功，但未检测到有效标志点')
-      } else {
-        console.log(`✓ 识别成功，共解析 ${landmarks.value.length} 个标志点`)
-        // 保存识别结果摘要，供检验报告页生成诊断证明书
-        saveReportSection('cephalometric', {
-          itemCount: landmarks.value.length,
-          points: landmarks.value.map(p => ({ name: p.label, x: +(p.x * 100).toFixed(1), y: +(p.y * 100).toFixed(1) })),
-        })
-      }
-      
-      await waitForImageLoad()
-      
-      console.log('===== 最终渲染坐标 =====')
-      landmarks.value.forEach(point => {
-        const pos = getPointPosition(point.x, point.y)
-        console.log(`${point.label}: 归一化(${point.x.toFixed(6)}, ${point.y.toFixed(6)}), 渲染像素(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`)
-      })
-    } else if (result.errClass) {
-      alert(formatErrorMessage(result.errClass))
-    } else {
-      alert('接口返回格式异常')
+    const response = await fetch(API_CONFIG.endpoint, {
+      method: 'POST',
+      headers: {
+        'sk': API_CONFIG.apiKey,
+      },
+      body: formData,
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
+
+    const data = await response.json()
+    console.log('===== 接口返回 =====', data)
+
+    if (data.code !== undefined && data.code !== 0 && data.code !== 200) {
+      const errMsg = data.msg || data.message || data.r || `业务错误: code=${data.code}`
+      if (typeof errMsg === 'string') {
+        alert(`识别失败: ${errMsg}`)
+      } else {
+        alert('识别失败，请检查图片是否符合要求')
+      }
+      return
+    }
+
+    resultImage.value = uploadedImage.value
+    landmarks.value = parseLandmarks(data.r, data.imgsize)
+
+    if (landmarks.value.length === 0) {
+      alert('识别成功，但未检测到有效标志点')
+    } else {
+      console.log(`✓ 识别成功，共解析 ${landmarks.value.length} 个标志点`)
+    }
+
+    await waitForImageLoad()
+
+    console.log('===== 最终渲染坐标 =====')
+    landmarks.value.forEach(point => {
+      const pos = getPointPosition(point.x, point.y)
+      console.log(`${point.label}: 归一化(${point.x.toFixed(6)}, ${point.y.toFixed(6)}), 渲染像素(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`)
+    })
   } catch (error) {
+    clearTimeout(timeoutId)
     console.error('=== API调用失败 ===', error)
-    alert('API调用失败，请检查网络连接或接口配置')
+
+    if (error.name === 'AbortError') {
+      alert('请求超时，请稍后重试')
+    } else if (error.message && error.message.includes('Failed to fetch')) {
+      alert('网络连接失败，请检查网络或代理配置')
+    } else {
+      alert(`识别请求失败: ${error.message || '未知错误'}`)
+    }
   } finally {
     isAnalyzing.value = false
-    console.log('✅ [Cephalo] finally executed, isAnalyzing reset to false')
   }
 }
 
@@ -960,7 +811,6 @@ const waitForImageLoad = () => {
 const resetAll = () => {
   uploadedImage.value = ''
   originalFile.value = null
-  cropRect.value = null
   resetAnalysis()
   if (fileInput.value) {
     fileInput.value.value = ''
@@ -1200,72 +1050,17 @@ const resetAll = () => {
   text-align: center;
   cursor: pointer;
   transition: all 0.3s;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 限制高度，保证「重新分析/重新选择」按钮无需滚动即可见 */
-  flex: 0 0 auto;
-  height: clamp(380px, 56vh, 660px);
-  margin-bottom: 8px;
-  overflow: hidden;
+  min-height: 380px;
   background: #fafafa;
-  position: relative;
 }
 
-.upload-area:hover:not(.has-image) {
+.upload-area:hover {
   border-color: #667eea;
   background: #fafaff;
-}
-
-.upload-area.has-image {
-  cursor: default;
-  border-style: solid;
-  border-color: #e8e8e8;
-  background: #f5f5f5;
-  padding: 0;
-}
-
-/* 提示条悬浮在上传区内部底部，不占文档流，保证上传前后按钮位置一致 */
-.preprocess-tip {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 14px;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  z-index: 2;
-  pointer-events: none;
-}
-
-.preprocess-tip .tip-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-  line-height: 1.4;
-}
-
-.preprocess-tip .tip-content {
-  flex: 1;
-}
-
-.preprocess-tip .tip-main {
-  margin: 0;
-  font-size: 13px;
-  color: #614700;
-  font-weight: 500;
-  line-height: 1.4;
-}
-
-.preprocess-tip .tip-sub {
-  margin: 2px 0 0 0;
-  font-size: 12px;
-  color: #8c6d1f;
-  line-height: 1.4;
 }
 
 .file-input {
@@ -1300,59 +1095,6 @@ const resetAll = () => {
   max-height: 100%;
   border-radius: 10px;
   object-fit: contain;
-  object-position: center center;
-}
-
-/* ===== 上传前裁剪框 ===== */
-.preview-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-width: 100%;
-  max-height: 100%;
-  line-height: 0;
-}
-
-.crop-layer {
-  position: absolute;
-  inset: 0;
-  cursor: default;
-}
-
-.crop-box {
-  position: absolute;
-  border: 2px dashed #4fc3f7;
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
-  cursor: move;
-  touch-action: none;
-}
-
-.crop-handle {
-  position: absolute;
-  right: -7px;
-  bottom: -7px;
-  width: 14px;
-  height: 14px;
-  background: #4fc3f7;
-  border: 2px solid #fff;
-  border-radius: 50%;
-  cursor: nwse-resize;
-  touch-action: none;
-}
-
-.crop-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
-  background: #e6f7ff;
-  border: 1px solid #91d5ff;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #135c8a;
-  flex-shrink: 0;
 }
 
 .button-group {
@@ -1360,6 +1102,7 @@ const resetAll = () => {
   gap: 12px;
   flex-shrink: 0;
   min-height: 48px;
+  z-index: 10;
 }
 
 .btn {
@@ -1421,9 +1164,7 @@ const resetAll = () => {
 }
 
 .result-area {
-  /* 与左侧上传区等高，上传前后界面尺寸保持一致 */
-  flex: 0 0 auto;
-  height: clamp(380px, 56vh, 660px);
+  flex: 1;
   border: 2px dashed #d9d9d9;
   border-radius: 12px;
   display: flex;
@@ -1431,9 +1172,7 @@ const resetAll = () => {
   justify-content: center;
   overflow: hidden;
   background: #fafafa;
-  margin-bottom: 8px;
-  transition: all 0.3s;
-  position: relative;
+  min-height: 380px;
 }
 
 .result-area.filled {
@@ -1469,25 +1208,17 @@ const resetAll = () => {
   align-items: center;
   justify-content: center;
   position: relative;
-  cursor: zoom-in;
-  user-select: none;
-  overflow: hidden;
 }
 
 .image-wrapper {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .result-image {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  object-position: center center;
+  width: 100%;
+  height: 100%;
   border-radius: 10px;
 }
 
@@ -1501,36 +1232,11 @@ const resetAll = () => {
 }
 
 .landmarks-list {
-  flex: 1;
-  min-height: 0;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  max-height: 280px;
-  overflow: hidden;
-}
-
-.landmarks-list .table-header {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
-  padding: 10px 16px;
-  font-size: 13px;
-  background: #fafafa;
-  font-weight: 600;
-  color: #666;
-  flex-shrink: 0;
-}
-
-.landmarks-list .table-body {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
+  margin-top: 16px;
 }
 
 .landmarks-list .table-row {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  display: flex;
   padding: 10px 16px;
   font-size: 13px;
   border-bottom: 1px solid #f5f5f5;
@@ -1544,6 +1250,12 @@ const resetAll = () => {
 
 .landmark-label {
   font-weight: 500;
+  flex: 1.2;
+}
+
+.landmarks-list .table-row span:nth-child(2),
+.landmarks-list .table-row span:nth-child(3) {
+  flex: 1;
 }
 
 .preview-modal {

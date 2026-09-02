@@ -23,7 +23,7 @@ const ERROR_TITLES = {
 const ERROR_DETAILS = {
   none_img: '请检查：\n1. 上传无手持、无多余边框的纯 X 光底片\n2. 图片清晰度足够（避免过暗、过曝）\n3. 图片格式为 JPEG / PNG\n4. 详情请见浏览器控制台',
   invalid_img: '请检查：\n1. 图片文件是否完整（重新导出一次）\n2. 格式为 JPEG / PNG / WEBP（避免 BMP / TIFF）\n3. 文件大小 < 10MB\n4. 详情请见浏览器控制台',
-  invalid_data: '后端判定提交数据非法，可能原因：\n1. 图片不是标准曲面断层片（全口全景X光片）\n2. 图片灰度/尺寸不达标（过暗、过曝、分辨率过低）\n3. 图片有遮挡或手持（需裁剪为纯底片）\n4. 详情请见浏览器控制台',
+  invalid_data: '请检查：\n1. 上传的影像是否为正确类型（曲面断层片/头颅侧位片/口腔影像）\n2. 影像是否完整、无遮挡\n3. 尝试更换一张清晰的影像重试\n4. 详情请见浏览器控制台',
   not_found: '请检查：\n1. 接口 URL 是否与 openapi-lab 平台文档一致\n2. vite.config.js 代理配置（/openapi 前缀）\n3. 重启 vite dev server\n4. 详情请见浏览器控制台',
   unauthorized: '请检查：\n1. API 密钥是否正确（控制台 → API 密钥页面）\n2. 账户是否欠费 / 套餐到期\n3. 详情请见浏览器控制台',
   server: '请稍后重试；持续出现请联系后端。\n详情请见浏览器控制台',
@@ -44,8 +44,8 @@ const PAGE_ERROR_CONTEXT = {
   panoramic: {
     none_img: '未识别到曲面断层片影像',
     invalid_img: '曲面断层片图片无效',
-    invalid_data: '曲面断层片数据异常，后端判定提交数据非法',
-    hint: '请上传标准的曲面断层X光片（全口全景片），确保灰度清晰、完整无遮挡',
+    invalid_data: '曲面断层片数据异常，请确认上传的是标准曲面断层X光片',
+    hint: '请上传标准的曲面断层X光片（全口全景片）',
   },
   autocrop: {
     none_img: '未识别到口腔影像',
@@ -176,9 +176,7 @@ export async function callOpenApi({ endpoint, file, apiKey = SHARED_API_KEY, tim
       reader.onerror = reject
       reader.readAsDataURL(file)
     })
-    // 与官方调试台示例一致：img 字段传纯 base64（去掉 dataURL 前缀）
-    const pureBase64 = String(dataUrl).split(',')[1] || ''
-    formData.append(fileField, pureBase64)
+    formData.append(fileField, dataUrl)
   } else {
     formData.append(fileField, file, file.name || 'upload.jpg')
   }

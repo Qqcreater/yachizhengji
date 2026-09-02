@@ -267,7 +267,6 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TopNav from '../components/TopNav.vue'
 import { t, tp } from '../i18n/index.js'
 import { SHARED_API_KEY, SHARED_TIMEOUT_MS, callOpenApi, formatErrorMessage } from '../utils/openapi.js'
-import { saveReportSection } from '../utils/medicalReport.js'
 
 // ===== 接口配置 =====
 /**
@@ -740,14 +739,6 @@ const parseResponse = async (data) => {
 
   infoRows.value = rows
 
-  // 保存识别结果摘要，供检验报告页生成诊断证明书
-  saveReportSection('autocrop', {
-    rows: rows.map(r => ({ label: r.label, value: r.value })),
-    poseLabel: correctionInfo.value?.poseLabel || correctionInfo.value?.poseRaw || '-',
-    hasCorrection: !!correctionInfo.value?.hasCorrection,
-    confidenceLevel: confidenceLevel.value || '-',
-  })
-
   // 兼容旧模板：同时填充 classificationList / poseList 供回退渲染
   for (const row of rows) {
     if (row.label.includes(t('autocrop.poseName').slice(0, 1)) || /姿态|pose|角度|angle|rotate|旋转/i.test(row.label)) {
@@ -1200,8 +1191,6 @@ const startAnalysis = async () => {
       file: originalFile.value,
       apiKey: API_CONFIG.apiKey,
       timeoutMs: API_CONFIG.timeout,
-      // 与官方调试台示例一致：img 以纯 base64 字符串传输
-      fileMode: 'base64',
       pageType: 'autocrop',
     })
 
@@ -1322,12 +1311,11 @@ const resetAll = () => {
   text-align: center;
   cursor: pointer;
   transition: all 0.3s;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 限制高度，保证「重新分析/重新选择」按钮无需滚动即可见 */
-  flex: 0 0 auto;
-  height: clamp(380px, 56vh, 660px);
+  min-height: 380px;
   margin-bottom: 8px;
   overflow: hidden;
   background: #fafafa;
@@ -1490,9 +1478,7 @@ const resetAll = () => {
 
 /* ===== 右侧结果区 ===== */
 .result-area {
-  /* 与左侧上传区等高，上传前后界面尺寸保持一致 */
-  flex: 0 0 auto;
-  height: clamp(380px, 56vh, 660px);
+  flex: 1;
   border: 2px dashed #d9d9d9;
   border-radius: 12px;
   display: flex;
@@ -1503,6 +1489,7 @@ const resetAll = () => {
   margin-bottom: 8px;
   transition: all 0.3s;
   position: relative;
+  min-height: 320px;
 }
 
 .result-area.filled {
