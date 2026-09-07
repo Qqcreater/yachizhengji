@@ -36,7 +36,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "代理调用失败", msg: err.message })
+      body: JSON.stringify({error:"函数异常",msg:err.message})
     }
   }
 }
