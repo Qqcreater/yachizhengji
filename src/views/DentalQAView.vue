@@ -88,10 +88,18 @@
             :title="t('qa.attachImage')"
             @click="fileInputRef?.click()"
           >📎</button>
+          <button
+            class="btn-voice"
+            :class="{ recording: isListening }"
+            :disabled="isSending"
+            :title="speechSupported ? (isListening ? t('qa.voiceStop') : t('qa.voiceStart')) : t('qa.voiceUnsupported')"
+            @click="toggleVoice"
+          >🎤</button>
           <textarea
             v-model="input"
             class="chat-input"
-            :placeholder="t('qa.inputPlaceholder')"
+            :class="{ 'is-listening': isListening }"
+            :placeholder="isListening ? t('qa.voiceListening') : t('qa.inputPlaceholder')"
             rows="2"
             @paste="handlePaste"
             @keydown.enter.exact.prevent="sendMessage()"
@@ -118,8 +126,8 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
-import { t } from '../i18n/index.js'
+import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
+import { t, getLang } from '../i18n/index.js'
 
 // ===== API 配置（集中管理）=====
 // 通过 Vite 代理 /deepseek-proxy 转发到 https://api.deepseek.com，规避浏览器跨域限制
@@ -142,6 +150,70 @@ const messagesRef = ref(null)
 const fileInputRef = ref(null)
 const attachedImage = ref(null) // { dataUrl, name }
 const previewUrl = ref(null)
+
+// ===== 语音输入（Web Speech API，Chrome / Edge 支持，需麦克风权限）=====
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
+const speechSupported = !!SpeechRecognitionCtor
+const isListening = ref(false)
+let recognition = null
+let voiceBaseText = '' // 本轮已确认的识别文本（中间结果实时追加显示）
+
+const toggleVoice = () => {
+  if (isListening.value) {
+    // 第二次点击：停止录音，识别文字保留在输入框中
+    recognition?.stop()
+    return
+  }
+  if (!speechSupported) {
+    alert(t('qa.voiceUnsupported'))
+    return
+  }
+  recognition = new SpeechRecognitionCtor()
+  recognition.lang = getLang() === 'en' ? 'en-US' : 'zh-CN'
+  recognition.continuous = true // 持续录音，直到第二次点击手动停止
+  recognition.interimResults = true
+
+  // 以输入框已有内容为基础，语音识别结果追加在其后
+  voiceBaseText = input.value.trim() ? input.value.replace(/\s*$/, '') + ' ' : ''
+
+  recognition.onresult = (e) => {
+    // 从 resultIndex 起处理：final 结果并入 base（仅处理一次，避免重复累加），
+    // interim 为当前短语的临时结果，实时覆盖显示
+    let interim = ''
+    let finalText = ''
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const transcript = e.results[i][0].transcript
+      if (e.results[i].isFinal) finalText += transcript
+      else interim += transcript
+    }
+    if (finalText) voiceBaseText += finalText
+    input.value = voiceBaseText + interim
+  }
+  recognition.onerror = (e) => {
+    isListening.value = false
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      alert(t('qa.voiceDenied'))
+    } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      console.warn('[DentalQA] 语音识别错误:', e.error)
+    }
+  }
+  recognition.onend = () => {
+    // 停止后状态复位，input 中的识别文字保留，供用户编辑或发送
+    isListening.value = false
+  }
+
+  try {
+    recognition.start()
+    isListening.value = true
+  } catch (err) {
+    console.error('[DentalQA] 语音识别启动失败:', err)
+    isListening.value = false
+  }
+}
+
+onBeforeUnmount(() => {
+  recognition?.stop()
+})
 
 // 消息列表：greeting 带 i18nKey 标记，仅用于展示，不参与 API 请求
 const messages = ref([
@@ -238,6 +310,9 @@ const sendMessage = async (presetText) => {
   const img = attachedImage.value
   if ((!text && !img) || isSending.value) return
 
+  // 发送时若正在录音则停止
+  if (isListening.value) recognition?.stop()
+
   input.value = ''
   attachedImage.value = null
 
@@ -318,6 +393,7 @@ const sendMessage = async (presetText) => {
 // 清空对话：仅保留欢迎语
 const clearChat = () => {
   if (isSending.value) return
+  if (isListening.value) recognition?.stop()
   messages.value = [{ role: 'assistant', i18nKey: 'qa.greeting', content: '' }]
 }
 </script>
@@ -628,6 +704,49 @@ const clearChat = () => {
 .btn-attach:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-voice {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #dfe3ee;
+  border-radius: 10px;
+  background: white;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-voice:hover:not(:disabled) {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.btn-voice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 录音中：麦克风周围持续红色高亮 + 脉冲扩散动画 */
+.btn-voice.recording {
+  border-color: #e05a5a;
+  background: #e05a5a;
+  box-shadow: 0 0 0 3px rgba(224, 90, 90, 0.25);
+  animation: micPulse 1.3s ease-in-out infinite;
+}
+
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(224, 90, 90, 0.30); }
+  50% { box-shadow: 0 0 0 9px rgba(224, 90, 90, 0); }
+}
+
+.chat-input.is-listening {
+  border-color: #e05a5a;
+  box-shadow: 0 0 0 3px rgba(224, 90, 90, 0.12);
 }
 
 .chat-input {
