@@ -136,7 +136,7 @@ const API_CONFIG = {
   endpoint: "/.netlify/functions/deepseek-proxy",
   apiKey: "",
   textModel: 'deepseek-chat',
-  visionModel: 'deepseek-v4-flash-vision-exp',
+  visionModel: 'deepseek-vl',
   timeoutMs: 120000,
   maxImageSize: 30 * 1024 * 1024,
 }
