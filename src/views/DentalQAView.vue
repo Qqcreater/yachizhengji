@@ -133,8 +133,8 @@ import { t, getLang } from '../i18n/index.js'
 // 通过 Vite 代理 /deepseek-proxy 转发到 https://api.deepseek.com，规避浏览器跨域限制
 // deepseek-chat：纯文本对话；deepseek-v4-flash-vision-exp：带图片时使用（图片仅允许出现在 user 消息中）
 const API_CONFIG = {
-  endpoint: '/deepseek-proxy/chat/completions',
-  apiKey: 'sk-be5a380346274522b203fc6b1f80ab6f',
+  endpoint: "/.netlify/functions/deepseek-proxy",
+  apiKey: "",
   textModel: 'deepseek-chat',
   visionModel: 'deepseek-v4-flash-vision-exp',
   timeoutMs: 120000,
@@ -355,7 +355,6 @@ const sendMessage = async (presetText) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_CONFIG.apiKey}`,
       },
       body: JSON.stringify({
         model: img ? API_CONFIG.visionModel : API_CONFIG.textModel,
