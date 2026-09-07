@@ -1,4 +1,4 @@
-exports.handler = async (event) => {
+export const handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -7,7 +7,7 @@ exports.handler = async (event) => {
     }
   }
 
-  const API_KEY = process.env.DEEPSEEK_API_KEY
+  const API_KEY = process.env.DEEPSEEK-API-KEY
   if (!API_KEY) {
     return {
       statusCode: 500,
